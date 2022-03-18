@@ -1,4 +1,0 @@
-string type
-int16 order
-string direction
-string action

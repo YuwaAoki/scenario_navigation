@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(intersection_recognition)
+project(scenario_navigation)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   std_msgs
   geometry_msgs
+#  yolov5_pytorch_ros
   message_generation
   actionlib_msgs
   actionlib
@@ -56,8 +57,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
-    Hypothesis.msg
-  #  Scenario.msg
+    PassageType.msg
     BoundingBox.msg
     BoundingBoxes.msg
 )
@@ -66,15 +66,13 @@ add_message_files(
  add_service_files(
    FILES
    Scenario.srv
-#   Service1.srv
-#   Service2.srv
  )
 
 ## Generate actions in the 'action' folder
-add_action_files(
-   FILES
-   BoundingBoxes.action
-)
+ add_action_files(
+    FILES
+    BoundingBoxes.action
+ )
 
 ## Generate added messages and services with any dependencies listed here
 generate_messages(
@@ -117,7 +115,7 @@ generate_messages(
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 #  INCLUDE_DIRS include
-#  LIBRARIES intersection_recognition
+#  LIBRARIES scenario_navigation
   CATKIN_DEPENDS roscpp rospy sensor_msgs std_msgs message_runtime 
 #  DEPENDS system_lib
 )
@@ -136,7 +134,7 @@ include_directories(
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/intersection_recognition.cpp
+#   src/${PROJECT_NAME}/scenario_navigation.cpp
 # )
 
 ## Add cmake target dependencies of the library
@@ -147,7 +145,7 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-# add_executable(${PROJECT_NAME}_node src/intersection_recognition_node.cpp)
+# add_executable(${PROJECT_NAME}_node src/scenario_navigation_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -211,7 +209,7 @@ include_directories(
 #############
 
 ## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_intersection_recognition.cpp)
+# catkin_add_gtest(${PROJECT_NAME}-test test/test_scenario_navigation.cpp)
 # if(TARGET ${PROJECT_NAME}-test)
 #   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 # endif()
@@ -220,39 +218,32 @@ include_directories(
 # catkin_add_nosetests(test)
 
 
-add_executable(cmd_vel_controller
-    src/cmd_vel_controller.cpp
+add_executable(local_planner
+    src/local_planner.cpp
 )
-add_dependencies(cmd_vel_controller intersection_recognition_generate_messages_cpp)
+add_dependencies(local_planner scenario_navigation_generate_messages_cpp)
 target_link_libraries(
-  cmd_vel_controller
-  ${catkin_LIBRARIES}
-)
-
-add_executable(cmd_vel_controller_with_IDWA
-    src/cmd_vel_controller_with_IDWA.cpp
-)
-add_dependencies(cmd_vel_controller_with_IDWA intersection_recognition_generate_messages_cpp)
-target_link_libraries(
-  cmd_vel_controller_with_IDWA
+  local_planner
   ${catkin_LIBRARIES}
 )
 
 
-add_executable(toe_finding
-    src/toe_finding.cpp
+add_executable(passage_recognition
+    src/passage_recognition.cpp
 )
+add_dependencies(passage_recognition scenario_navigation_generate_messages_cpp)
 target_link_libraries(
-  toe_finding
+  passage_recognition
   ${catkin_LIBRARIES}
 )
 
-add_executable(extended_toe_finding
-    src/extended_toe_finding.cpp
+
+add_executable(passage_recognition_with_yolo
+    src/passage_recognition_with_yolo.cpp
 )
-add_dependencies(extended_toe_finding intersection_recognition_generate_messages_cpp)
+add_dependencies(passage_recognition_with_yolo scenario_navigation_generate_messages_cpp)
 target_link_libraries(
-  extended_toe_finding
+  passage_recognition_with_yolo
   ${catkin_LIBRARIES}
 )
 
@@ -260,28 +251,9 @@ target_link_libraries(
 add_executable(scenario_executor
     src/scenario_executor.cpp
 )
-add_dependencies(scenario_executor intersection_recognition_generate_messages_cpp)
+add_dependencies(scenario_executor scenario_navigation_generate_messages_cpp)
 target_link_libraries(
   scenario_executor
   ${catkin_LIBRARIES}
 )
-
-add_executable(simple_emergency_stop
-    src/simple_emergency_stop.cpp
-)
-target_link_libraries(
-  simple_emergency_stop
-  ${catkin_LIBRARIES}
-)
-
-
-add_executable(extended_toe_finding_and_yolo
-    src/extended_toe_finding_and_yolo.cpp
-)
-add_dependencies(extended_toe_finding_and_yolo ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(
-  extended_toe_finding_and_yolo
-  ${catkin_LIBRARIES}
-)
-
 

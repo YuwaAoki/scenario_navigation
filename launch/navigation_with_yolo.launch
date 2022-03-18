@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<launch>
+  <node name="passage_recognition_with_yolo" pkg="scenario_navigation" type="passage_recognition_with_yolo" output="screen" >
+    <remap from="scan" to="vel_scan" />
+    <remap from="image_raw" to="image/mercator" />
+    <param name="SCAN_HZ" value="10"/>
+    <param name="robot_frame" value="base_link"/>
+    <param name="ROBOT_RADIUS" value="0.5"/>
+    <param name="MIN_WALL_DISTANCE" value="1"/>
+  </node>
+
+  <node name="scenario_executor" pkg="scenario_navigation" type="scenario_executor" output="screen" />
+
+  <node name="local_planner" pkg="scenario_navigation" type="local_planner" output="screen" >
+    <remap from="scan" to="vel_scan" />
+    <remap from="cmd_vel" to="icart_mini/cmd_vel" />
+  </node>
+
+  <node name="scenario_parser" pkg="scenario_navigation" type="scenario_parser.py" output="screen" >
+    <param name="scenario_path" value="$(find scenario_navigation)/config/Scenarios/scenario02.txt" />
+  </node>
+
+  <node name="rviz" pkg="rviz" type="rviz" />
+
+</launch>

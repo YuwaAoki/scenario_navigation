@@ -4,8 +4,8 @@
 #include "std_msgs/String.h"
 #include "std_msgs/Float32.h"
 #include "geometry_msgs/Twist.h"
-#include "intersection_recognition/Scenario.h"
-#include "intersection_recognition/Hypothesis.h"
+#include "scenario_navigation/Scenario.h"
+#include "scenario_navigation/PassageType.h"
 #include <unistd.h>
 #include <cmath>
 #include <vector>
@@ -17,22 +17,22 @@ class cmdVelController {
         cmdVelController();
         int SCENARIO_MAX = 10;
         void getRosParam(void);
-        bool compareScenarioAndHypothesis(const intersection_recognition::Hypothesis::ConstPtr& hypothesis);
+        bool compareScenarioAndPassageType(const scenario_navigation::PassageType::ConstPtr& passage_type);
         void loadNextScenario(void);
         void updateLastNode(bool center_flg, bool back_flg, bool left_flg, bool right_flg);
-        bool compareLastNodeAndCurrentNode(const intersection_recognition::Hypothesis::ConstPtr& hypothesis);
+        bool compareLastNodeAndCurrentNode(const scenario_navigation::PassageType::ConstPtr& passage_type);
 
         void turnFinishFlgCallback(const std_msgs::Bool::ConstPtr& turn_finish_flg);
-        void hypothesisCallback(const intersection_recognition::Hypothesis::ConstPtr& hypothesis);
-        void emergencyStopFlgCallback(const std_msgs::Bool::ConstPtr& emergency_stop_flg);
-        bool scenarioCallback(intersection_recognition::Scenario::Request& scenario,
-                              intersection_recognition::Scenario::Response& res);
+        void passageTypeCallback(const scenario_navigation::PassageType::ConstPtr& passage_type);
+        void stopCallback(const std_msgs::Bool::ConstPtr& stop);
+        bool scenarioCallback(scenario_navigation::Scenario::Request& scenario,
+                              scenario_navigation::Scenario::Response& res);
      private:
         ros::NodeHandle node_;
-        ros::Publisher emergency_stop_flg_pub_;
+        ros::Publisher stop_pub_;
         ros::Publisher rotate_rad_pub_;
-        ros::Subscriber hypothesis_sub_;
-        ros::Subscriber emergency_stop_flg_sub_;
+        ros::Subscriber passage_type_sub_;
+        ros::Subscriber stop_sub_;
         ros::Subscriber turn_finish_flg_sub_;
         ros::ServiceServer scenario_server_;
 
@@ -57,19 +57,19 @@ class cmdVelController {
         bool turn_flg_ = false;
         bool change_node_flg_ = false;
         bool satisfy_conditions_flg_ = false;
-        bool emergency_stop_flg_ = true;
+        bool stop_flg_ = true;
         bool request_update_last_node_flg = true;
         std_msgs::Float32 rotate_rad_for_pub_;
-        intersection_recognition::Hypothesis last_node_;
+        scenario_navigation::PassageType last_node_;
 };
 
 cmdVelController::cmdVelController(){
-    emergency_stop_flg_pub_ = node_.advertise<std_msgs::Bool>("emergency_stop_flg", 1, false);
+    stop_pub_ = node_.advertise<std_msgs::Bool>("stop", 1, false);
     rotate_rad_pub_ = node_.advertise<std_msgs::Float32>("rotate_rad", 1, false);
 
     turn_finish_flg_sub_ = node_.subscribe<std_msgs::Bool> ("turn_finish_flg", 1, &cmdVelController::turnFinishFlgCallback, this);
-    hypothesis_sub_ = node_.subscribe<intersection_recognition::Hypothesis> ("hypothesis", 1, &cmdVelController::hypothesisCallback, this);
-    emergency_stop_flg_sub_ = node_.subscribe<std_msgs::Bool> ("emergency_stop_flg", 1, &cmdVelController::emergencyStopFlgCallback, this);
+    passage_type_sub_ = node_.subscribe<scenario_navigation::PassageType> ("passage_type", 1, &cmdVelController::passageTypeCallback, this);
+    stop_sub_ = node_.subscribe<std_msgs::Bool> ("stop", 1, &cmdVelController::stopCallback, this);
     scenario_server_ = node_.advertiseService("scenario", &cmdVelController::scenarioCallback, this);
 
     updateLastNode(false, false, false, false);
@@ -81,13 +81,13 @@ void cmdVelController::getRosParam(void){
     node_.getParam("scenario_executor/scenario_max", SCENARIO_MAX);
 }
 
-bool cmdVelController::compareScenarioAndHypothesis(const intersection_recognition::Hypothesis::ConstPtr& hypothesis){
+bool cmdVelController::compareScenarioAndPassageType(const scenario_navigation::PassageType::ConstPtr& passage_type){
     std::string target_type = *std::next(target_type_itr_begin_, scenario_progress_cnt_);
     std::string target_direction = *std::next(target_direction_itr_begin_, scenario_progress_cnt_);
 
 // check "straight_road"
     if(target_type == "straight_road"){
-        if(hypothesis->center_flg && hypothesis->back_flg && !hypothesis->left_flg && !hypothesis->right_flg){
+        if(passage_type->center_flg && passage_type->back_flg && !passage_type->left_flg && !passage_type->right_flg){
             return true;
         }
     }
@@ -95,15 +95,15 @@ bool cmdVelController::compareScenarioAndHypothesis(const intersection_recogniti
 // check 3_way_left and 3_way_right when 3_way is designated by scenario
     if(target_type == "3_way"){
     // 3_way_left
-        if(hypothesis->center_flg && hypothesis->back_flg && hypothesis->left_flg && !hypothesis->right_flg){
+        if(passage_type->center_flg && passage_type->back_flg && passage_type->left_flg && !passage_type->right_flg){
             return true;
         }
     // 3_way_right
-        if(hypothesis->center_flg && hypothesis->back_flg && !hypothesis->left_flg && hypothesis->right_flg){
+        if(passage_type->center_flg && passage_type->back_flg && !passage_type->left_flg && passage_type->right_flg){
             return true;
         }
      // 3_way_center
-        if(!hypothesis->center_flg && hypothesis->back_flg && hypothesis->left_flg && hypothesis->right_flg){
+        if(!passage_type->center_flg && passage_type->back_flg && passage_type->left_flg && passage_type->right_flg){
             return true;
         }
    }
@@ -111,19 +111,19 @@ bool cmdVelController::compareScenarioAndHypothesis(const intersection_recogniti
 // check "end"(= 突き当り)
     if(target_type == "end"){
     // dead_end
-        if(!hypothesis->center_flg && hypothesis->back_flg && !hypothesis->left_flg && !hypothesis->right_flg){
+        if(!passage_type->center_flg && passage_type->back_flg && !passage_type->left_flg && !passage_type->right_flg){
             return true;
         }
     // right
-        if(!hypothesis->center_flg && hypothesis->back_flg && !hypothesis->left_flg && hypothesis->right_flg){
+        if(!passage_type->center_flg && passage_type->back_flg && !passage_type->left_flg && passage_type->right_flg){
             return true;
         }
     // left
-        if(!hypothesis->center_flg && hypothesis->back_flg && hypothesis->left_flg && !hypothesis->right_flg){
+        if(!passage_type->center_flg && passage_type->back_flg && passage_type->left_flg && !passage_type->right_flg){
             return true;
         }
     // 3_way_center
-        if(!hypothesis->center_flg && hypothesis->back_flg && hypothesis->left_flg && hypothesis->right_flg){
+        if(!passage_type->center_flg && passage_type->back_flg && passage_type->left_flg && passage_type->right_flg){
             return true;
         }
     }
@@ -131,18 +131,18 @@ bool cmdVelController::compareScenarioAndHypothesis(const intersection_recogniti
 // check "corridor"(ex, 交差点， 通路)
     if(target_type == "corridor"){
         if(target_direction == "left"){
-            if(hypothesis->left_flg){
+            if(passage_type->left_flg){
                 return true;
             }
         }
         else if(target_direction == "right"){
-            if(hypothesis->right_flg){
+            if(passage_type->right_flg){
                 return true;
             }
         }
     // if target_direction is not designated, do below
         else{
-            if(hypothesis->left_flg || hypothesis->right_flg){
+            if(passage_type->left_flg || passage_type->right_flg){
                 return true;
             }
         }
@@ -154,17 +154,17 @@ void cmdVelController::loadNextScenario(void){
     std::string action = *std::next(target_action_itr_begin_, scenario_progress_cnt_);
 
 // stop robot
-    emergency_stop_flg_ = true;
+    stop_flg_ = true;
 
     if(action == "stop"){
         ROS_INFO("Robot gets a goal");
-        std_msgs::Bool emergency_stop_flg_for_pub;
-        emergency_stop_flg_for_pub.data = emergency_stop_flg_;
-        emergency_stop_flg_pub_.publish(emergency_stop_flg_for_pub);
+        std_msgs::Bool stop_flg_for_pub;
+        stop_flg_for_pub.data = stop_flg_;
+        stop_pub_.publish(stop_flg_for_pub);
     }
     else{
         ROS_INFO("Execute next action(%s)", action.c_str());
-        emergency_stop_flg_ = false;
+        stop_flg_ = false;
         change_node_flg_ = false;
         if(action.find("turn") != std::string::npos){
             turn_flg_ = true;
@@ -197,9 +197,9 @@ void cmdVelController::updateLastNode(bool center_flg, bool back_flg, bool left_
     last_node_.right_flg = right_flg;
 }
 
-bool cmdVelController::compareLastNodeAndCurrentNode(const intersection_recognition::Hypothesis::ConstPtr& hypothesis){
-    if(last_node_.center_flg == hypothesis->center_flg && last_node_.back_flg == hypothesis->back_flg &&
-        last_node_.left_flg == hypothesis->left_flg && last_node_.right_flg == hypothesis->right_flg){
+bool cmdVelController::compareLastNodeAndCurrentNode(const scenario_navigation::PassageType::ConstPtr& passage_type){
+    if(last_node_.center_flg == passage_type->center_flg && last_node_.back_flg == passage_type->back_flg &&
+        last_node_.left_flg == passage_type->left_flg && last_node_.right_flg == passage_type->right_flg){
             return true;
         }
     else{
@@ -207,15 +207,15 @@ bool cmdVelController::compareLastNodeAndCurrentNode(const intersection_recognit
     }
 }
 
-void cmdVelController::hypothesisCallback(const intersection_recognition::Hypothesis::ConstPtr& hypothesis){
-    if(! emergency_stop_flg_){
+void cmdVelController::passageTypeCallback(const scenario_navigation::PassageType::ConstPtr& passage_type){
+    if(! stop_flg_){
         if(request_update_last_node_flg){
-            updateLastNode(hypothesis->center_flg, hypothesis->back_flg, hypothesis->left_flg, hypothesis->right_flg);
+            updateLastNode(passage_type->center_flg, passage_type->back_flg, passage_type->left_flg, passage_type->right_flg);
             request_update_last_node_flg = false;
         }
         if(! turn_flg_){
             if(change_node_flg_){
-                satisfy_conditions_flg_ = compareScenarioAndHypothesis(hypothesis);
+                satisfy_conditions_flg_ = compareScenarioAndPassageType(passage_type);
                 if(satisfy_conditions_flg_){
                     ROS_INFO("find target node");
                     reach_target_type_cnt_++;
@@ -223,7 +223,7 @@ void cmdVelController::hypothesisCallback(const intersection_recognition::Hypoth
                         reach_target_type_cnt_ = 0;
                         scenario_order_cnt_++;
                         change_node_flg_ = false;
-                        updateLastNode(hypothesis->center_flg, hypothesis->back_flg, hypothesis->left_flg, hypothesis->right_flg);
+                        updateLastNode(passage_type->center_flg, passage_type->back_flg, passage_type->left_flg, passage_type->right_flg);
                         int order = *std::next(target_order_itr_begin_, scenario_progress_cnt_);
                         if(order <= scenario_order_cnt_){
                             ROS_INFO("Robot reaches target_node!!");
@@ -238,11 +238,11 @@ void cmdVelController::hypothesisCallback(const intersection_recognition::Hypoth
                 }
             }
             else{
-                if(! compareLastNodeAndCurrentNode(hypothesis)){
+                if(! compareLastNodeAndCurrentNode(passage_type)){
                     reach_different_type_cnt_++;
                     if(reach_different_type_cnt_margin_ <= reach_different_type_cnt_){
                         reach_different_type_cnt_ = 0;
-                        updateLastNode(hypothesis->center_flg, hypothesis->back_flg, hypothesis->left_flg, hypothesis->right_flg);
+                        updateLastNode(passage_type->center_flg, passage_type->back_flg, passage_type->left_flg, passage_type->right_flg);
                         change_node_flg_ = true;
                     }
                 }
@@ -263,12 +263,12 @@ void cmdVelController::turnFinishFlgCallback(const std_msgs::Bool::ConstPtr& tur
     change_node_flg_ = false;
 }
 
-void cmdVelController::emergencyStopFlgCallback(const std_msgs::Bool::ConstPtr& emergency_stop_flg){
-    emergency_stop_flg_ = emergency_stop_flg->data;
+void cmdVelController::stopCallback(const std_msgs::Bool::ConstPtr& stop_flg){
+    stop_flg_ = stop_flg->data;
 }
 
-bool cmdVelController::scenarioCallback(intersection_recognition::Scenario::Request& scenario,
-                                        intersection_recognition::Scenario::Response& res){
+bool cmdVelController::scenarioCallback(scenario_navigation::Scenario::Request& scenario,
+                                        scenario_navigation::Scenario::Response& res){
     scenario_num_++;
     target_type_.push_back(scenario.type);
     target_order_.push_back(scenario.order);
@@ -285,17 +285,17 @@ bool cmdVelController::scenarioCallback(intersection_recognition::Scenario::Requ
         target_direction_itr_begin_ = target_direction_.begin();
         target_action_itr_begin_ = target_action_.begin();
 
-        emergency_stop_flg_ = false;
-        std_msgs::Bool emergency_stop_flg_for_pub;
-        emergency_stop_flg_for_pub.data = emergency_stop_flg_;
-        emergency_stop_flg_pub_.publish(emergency_stop_flg_for_pub);
+        stop_flg_ = false;
+        std_msgs::Bool stop_flg_for_pub;
+        stop_flg_for_pub.data = stop_flg_;
+        stop_pub_.publish(stop_flg_for_pub);
         loadNextScenario();
     }
     else{
-        emergency_stop_flg_ = true;
-        std_msgs::Bool emergency_stop_flg_for_pub;
-        emergency_stop_flg_for_pub.data = emergency_stop_flg_;
-        emergency_stop_flg_pub_.publish(emergency_stop_flg_for_pub);
+        stop_flg_ = true;
+        std_msgs::Bool stop_flg_for_pub;
+        stop_flg_for_pub.data = stop_flg_;
+        stop_pub_.publish(stop_flg_for_pub);
     }
 
 

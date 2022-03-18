@@ -2,7 +2,7 @@
 #include "sensor_msgs/LaserScan.h"
 #include "visualization_msgs/MarkerArray.h"
 #include "std_msgs/String.h"
-#include "intersection_recognition/Hypothesis.h"
+#include "scenario_navigation/PassageType.h"
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
@@ -11,16 +11,15 @@
 #include <bits/stdc++.h>
 #include <vector>
 
-class intersectionRecognition {
+class passageRecognition {
     public:
-        intersectionRecognition();
-        int SCAN_HZ;
-        float ROBOT_RADIUS;
-        float MIN_WALL_DISTANCE;
-        float distance_thresh;
-        std::string robot_frame_;
-        void get_ros_param(void);
-        intersection_recognition::Hypothesis generate_publish_variable(bool center_flg, bool back_flg, bool left_flg, bool right_flg,
+        passageRecognition();
+        int SCAN_HZ = 10;
+        float ROBOT_RADIUS = 0.5;
+        float MIN_WALL_DISTANCE = 1.0;
+        float distance_thresh = 2.0;
+        std::string robot_frame_ = "base_link";
+        scenario_navigation::PassageType generate_publish_variable(bool center_flg, bool back_flg, bool left_flg, bool right_flg,
                                                                         int center_angle, int back_angle, int left_angle, int right_angle);
         void checkRobotCollision(std::vector<double> *x, std::vector<double> *y, std::vector<int> scan_index, std::vector<float*> distance_list);
         void scanCallback(const sensor_msgs::LaserScan::ConstPtr& scan);
@@ -29,27 +28,22 @@ class intersectionRecognition {
         ros::NodeHandle node_;
         ros::Subscriber scan_sub_;
         ros::Publisher marker_pub_;
-        ros::Publisher hypothesis_pub_;
+        ros::Publisher passage_type_pub_;
 };
 
-intersectionRecognition::intersectionRecognition(){
-    scan_sub_ = node_.subscribe<sensor_msgs::LaserScan> ("/scan", 1, &intersectionRecognition::scanCallback, this);
+passageRecognition::passageRecognition(){
+    node_.getParam("passageRecognition/SCAN_HZ", SCAN_HZ);
+    node_.getParam("passageRecognition/robot_frame", robot_frame_);
+    node_.getParam("passageRecognition/ROBOT_RADIUS", ROBOT_RADIUS);
+    node_.getParam("passageRecognition/MIN_WALL_DISTANCE", MIN_WALL_DISTANCE);
+
+    scan_sub_ = node_.subscribe<sensor_msgs::LaserScan> ("/scan", 1, &passageRecognition::scanCallback, this);
     marker_pub_ = node_.advertise<visualization_msgs::MarkerArray>("corridor_visualization", 1);
-    hypothesis_pub_ = node_.advertise<intersection_recognition::Hypothesis>("hypothesis", 1);
+    passage_type_pub_ = node_.advertise<scenario_navigation::PassageType>("passage_type", 1);
 }
 
-void intersectionRecognition::get_ros_param(void){
-    SCAN_HZ = 10;
-    ROBOT_RADIUS = 0.5;
-    MIN_WALL_DISTANCE = 1.0;
-    robot_frame_ = "base_link";
-    node_.getParam("extended_toe_finding/SCAN_HZ", SCAN_HZ);
-    node_.getParam("extended_toe_finding/robot_frame", robot_frame_);
-    node_.getParam("extended_toe_finding/ROBOT_RADIUS", ROBOT_RADIUS);
-    node_.getParam("extended_toe_finding/MIN_WALL_DISTANCE", MIN_WALL_DISTANCE);
-}
-
-void intersectionRecognition::checkRobotCollision(std::vector<double> *x, std::vector<double> *y, std::vector<int> scan_index, std::vector<float*> distance_list){
+// assume there is no passage if a collision is likely to occur
+void passageRecognition::checkRobotCollision(std::vector<double> *x, std::vector<double> *y, std::vector<int> scan_index, std::vector<float*> distance_list){
     int cnt;
     int index_low, index_high;
     int scan_num = x->size();
@@ -65,11 +59,11 @@ void intersectionRecognition::checkRobotCollision(std::vector<double> *x, std::v
                 break;
             }
             cnt++;
-        }while(skip * cnt >= scan_num / 4 || 2 * ROBOT_RADIUS > std::hypot(x->at(index_low) - x->at(index_high), y->at(index_low) - y->at(index_high)));
+        } while(skip * cnt >= scan_num / 4 || 2 * ROBOT_RADIUS > std::hypot(x->at(index_low) - x->at(index_high), y->at(index_low) - y->at(index_high)));
     }
 }
 
-void intersectionRecognition::scanCallback(const sensor_msgs::LaserScan::ConstPtr& scan){
+void passageRecognition::scanCallback(const sensor_msgs::LaserScan::ConstPtr& scan){
     int num_scan = scan->ranges.size();
     std::vector<double> x(num_scan), y(num_scan);
     std::vector<int> angle_bin(90);
@@ -77,7 +71,7 @@ void intersectionRecognition::scanCallback(const sensor_msgs::LaserScan::ConstPt
     std::vector<float> scan_cp(num_scan);
     std::copy(scan->ranges.begin(), scan->ranges.end(), scan_cp.begin());
 
-// skip inf
+    // convert to cartesian coordinate system corrdinate and skip inf
     int index_prev = 0;
     double last_scan = 0;
     while((std::isnan(scan_cp[index_prev]) || std::isinf(scan_cp[index_prev]) || scan_cp[index_prev] > scan->range_max) && index_prev < num_scan) index_prev++;
@@ -98,9 +92,10 @@ void intersectionRecognition::scanCallback(const sensor_msgs::LaserScan::ConstPt
         y[i] = scan_range * sin(angle);
     }
 
-    for(int i = 1; i+10 < num_scan - 1; i ++) {
+    // detect wall angle
+    for(int i = 1; i + 10 < num_scan - 1; i ++) {
         double angle = atan2(y[i] - y[i+10-1], x[i] - x[i+10-1]);
-        while(angle <       0.0) angle += M_PI_2;
+        while(angle <     0.0) angle += M_PI_2;
         while(angle >= M_PI_2) angle -= M_PI_2;
         angle_bin[static_cast<int>(angle/M_PI*180)] += 1;
     }
@@ -110,15 +105,17 @@ void intersectionRecognition::scanCallback(const sensor_msgs::LaserScan::ConstPt
     max_bin = angle_bin[max_angle];
 
     double scan_angle = static_cast<double>((max_angle <= 45) ? max_angle : max_angle - 90)/180.0*M_PI;
+
+    // measure distance
     int scan_left   = static_cast<int>((scan_angle + M_PI_2 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
     int scan_center = static_cast<int>((scan_angle          - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
     int scan_right  = static_cast<int>((scan_angle - M_PI_2 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
     int scan_back   = static_cast<int>((scan_angle - M_PI   - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
-
-    float distance_left = std::sqrt(x[scan_left]*x[scan_left] + y[scan_left]*y[scan_left]);
-    float distance_center = std::sqrt(x[scan_center]*x[scan_center] + y[scan_center]*y[scan_center]);
-    float distance_right = std::sqrt(x[scan_right]*x[scan_right] + y[scan_right]*y[scan_right]);
-    float distance_back = std::sqrt(x[scan_back]*x[scan_back] + y[scan_back]*y[scan_back]);
+    
+    float distance_left   = std::sqrt(x[scan_left]   * x[scan_left]   + y[scan_left]   * y[scan_left]  );
+    float distance_center = std::sqrt(x[scan_center] * x[scan_center] + y[scan_center] * y[scan_center]);
+    float distance_right  = std::sqrt(x[scan_right]  * x[scan_right]  + y[scan_right]  * y[scan_right] );
+    float distance_back   = std::sqrt(x[scan_back]   * x[scan_back]   + y[scan_back]   * y[scan_back]  );
 
     std::vector<int> scan_index = {scan_left, scan_center, scan_right, scan_back};
     std::vector<float*> distance_list(4);
@@ -126,58 +123,33 @@ void intersectionRecognition::scanCallback(const sensor_msgs::LaserScan::ConstPt
     distance_list[1] = &distance_center;
     distance_list[2] = &distance_right;
     distance_list[3] = &distance_back;
+
+    // assume there is no passage if a collision is likely to occur
     checkRobotCollision(&x, &y, scan_index, distance_list);
 
-// publish hypothesis of intersection recognition
-    intersection_recognition::Hypothesis hypothesis;
-    if(distance_left > distance_thresh){
-        if (scan_left >= 0){
-            toe_index_list.push_back(scan_left);
-            hypothesis.left_flg = true;
-            hypothesis.left_angle = scan_angle + M_PI_2 - scan->angle_min;
-        }
-    }
-    else{
-        hypothesis.left_flg = false;
-        hypothesis.left_angle = 0;
-    }
+    // publish passage_type of passage recognition
+    scenario_navigation::PassageType passage_type;
+	    
+    passage_type.left_flg = distance_left > distance_thresh ? true : false;
+    passage_type.left_angle = scan_angle + M_PI_2 - scan->angle_min;
 
-    if(distance_center > distance_thresh){
-        toe_index_list.push_back(scan_center);
-        hypothesis.center_flg = true;
-        hypothesis.center_angle = scan_angle - scan->angle_min;
-   }
-    else{
-        hypothesis.center_flg = false;
-        hypothesis.center_angle = 0;
-    }
+    passage_type.center_flg = distance_center > distance_thresh ? true : false;
+    passage_type.center_angle = scan_angle - scan->angle_min;
 
-    if(distance_right > distance_thresh){
-        if (scan_right < num_scan){
-            toe_index_list.push_back(scan_right);
-            hypothesis.right_flg = true;
-            hypothesis.right_angle = scan_angle - M_PI_2 - scan->angle_min;
-        }
-    }
-    else{
-        hypothesis.right_flg = false;
-        hypothesis.right_angle = 0;
-    }
+    passage_type.right_flg = distance_right > distance_thresh ? true : false;
+    passage_type.right_angle = scan_angle - M_PI_2 - scan->angle_min;
 
-    if(distance_back > distance_thresh){
-        toe_index_list.push_back(scan_back);
-        hypothesis.back_flg = true;
-        hypothesis.back_angle = scan_angle - M_PI - scan->angle_min;
-    }
-    else{
-        hypothesis.back_flg = false;
-        hypothesis.back_angle = 0;
-    }
+    passage_type.back_flg = distance_back > distance_thresh ? true : false;
+    passage_type.back_angle = scan_angle - M_PI - scan->angle_min;
 
-// publish hypothesis of intersection recognition
-    hypothesis_pub_.publish(hypothesis);
+    // publish passage_type of passage recognition
+    passage_type_pub_.publish(passage_type);
 
-// publish line for rviz
+    // publish line for rviz
+    if (passage_type.left_flg  ) toe_index_list.push_back(scan_left  );
+    if (passage_type.center_flg) toe_index_list.push_back(scan_center);
+    if (passage_type.right_flg ) toe_index_list.push_back(scan_right );
+    if (passage_type.back_flg  ) toe_index_list.push_back(scan_back  );
     visualization_msgs::MarkerArray marker_line;
     marker_line.markers.resize(toe_index_list.size());
     geometry_msgs::Point linear_start;
@@ -225,9 +197,8 @@ void intersectionRecognition::scanCallback(const sensor_msgs::LaserScan::ConstPt
 }
 
 int main(int argc, char** argv){
-    ros::init(argc, argv, "extended_toe_finding");
-    intersectionRecognition recognition;
-    recognition.get_ros_param();
+    ros::init(argc, argv, "passageRecognition");
+    passageRecognition recognition;
     ros::Rate loop_rate(recognition.SCAN_HZ);
     while(ros::ok()){
         ros::spinOnce();
