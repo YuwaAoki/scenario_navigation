@@ -18,3 +18,8 @@ https://github.com/open-rdc/orne_navigation
 
 4) Execute the scenario navigation  
 `roslaunch scenario_navigation navigation.launch`
+
+
+- Real Robot (with vison)  
+1) Execute the scenario navigation with vision  
+`roslaunch scenario_navigation navigation_with_yolo.launch`  
