@@ -45,7 +45,7 @@ localPlanner::localPlanner(){
     node_.getParam("localPlanner/OBSTACLE_AVOIDANCE_DISTANCE_THRE", OBSTACLE_AVOIDANCE_DISTANCE_THRE);
     node_.getParam("localPlanner/OBSTACLE_AVOIDANCE_RAD", OBSTACLE_AVOIDANCE_RAD);
 
-    cmd_vel_pub_ = node_.advertise<geometry_msgs::Twist>("icart_mini/cmd_vel", 1, false);
+    cmd_vel_pub_ = node_.advertise<geometry_msgs::Twist>("cmd_vel", 1, false);
     turn_finish_flg_pub_ = node_.advertise<std_msgs::Bool>("turn_finish_flg", 1, false);
     imu_sub_ = node_.subscribe<sensor_msgs::Imu> ("imu_data", 1, &localPlanner::imuCallback, this);
     rotate_rad_sub_ = node_.subscribe<std_msgs::Float32> ("rotate_rad", 1, &localPlanner::turnRadCallback, this);
@@ -56,10 +56,12 @@ localPlanner::localPlanner(){
 void localPlanner::imuCallback(const sensor_msgs::Imu::ConstPtr& imu_data){
     current_yaw_rad_ -= imu_data->angular_velocity.z / IMU_HZ;
     if(stop_flg_){
+
         vel_.linear.x = 0.0;
         vel_.angular.z = 0.0;
         cmd_vel_pub_.publish(vel_);
     } else if(turn_flg_){
+
         rotate_rad_ -= imu_data->angular_velocity.z / IMU_HZ;
         if(std::abs(rotate_rad_) < 3.14/180){
             turn_flg_ = false;
@@ -72,6 +74,7 @@ void localPlanner::imuCallback(const sensor_msgs::Imu::ConstPtr& imu_data){
         vel_.angular.z = rotate_rad_ > 0 ? 0.5 : -0.5;
         cmd_vel_pub_.publish(vel_);
      } else {
+        ROS_INFO("imu");
         vel_.linear.x = 0.55;
         vel_.angular.z = -(target_yaw_rad_ - current_yaw_rad_);
         cmd_vel_pub_.publish(vel_);

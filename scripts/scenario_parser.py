@@ -3,7 +3,7 @@
 import rospy
 import rosparam
 from std_msgs.msg import String
-from intersection_recognition.srv import Scenario
+from scenario_navigation.srv import Scenario
 import MeCab
 
 class ScenarioParser:
