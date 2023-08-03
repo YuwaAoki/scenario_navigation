@@ -14,7 +14,7 @@ class localPlanner {
      public:
         localPlanner();
         geometry_msgs::Twist vel_;
-        double IMU_HZ = 100.0;
+        double IMU_HZ = 10.0;
         double OBSTACLE_AVOIDANCE_DISTANCE_THRE = 0.4;
         double OBSTACLE_AVOIDANCE_RAD = 0.3;
         float rotate_rad_ = 0.0;
@@ -55,15 +55,19 @@ localPlanner::localPlanner(){
 
 void localPlanner::imuCallback(const sensor_msgs::Imu::ConstPtr& imu_data){
     current_yaw_rad_ -= imu_data->angular_velocity.z / IMU_HZ;
+    
     if(stop_flg_){
 
         vel_.linear.x = 0.0;
         vel_.angular.z = 0.0;
-        cmd_vel_pub_.publish(vel_);
+        //cmd_vel_pub_.publish(vel_);
     } else if(turn_flg_){
-
         rotate_rad_ -= imu_data->angular_velocity.z / IMU_HZ;
         if(std::abs(rotate_rad_) < 3.14/180){
+        // 1.57){
+        // if(std::abs(rotate_rad_) < 1.57){
+        // if(std::abs(rotate_rad_) < 1.57){
+        
             turn_flg_ = false;
             std_msgs::Bool turn_finish;
             turn_finish.data = true;
@@ -71,13 +75,15 @@ void localPlanner::imuCallback(const sensor_msgs::Imu::ConstPtr& imu_data){
             rotate_rad_ = 0;
         }
         vel_.linear.x = 0.0;
-        vel_.angular.z = rotate_rad_ > 0 ? 0.5 : -0.5;
-        cmd_vel_pub_.publish(vel_);
+        //vel_.angular.z = rotate_rad_ > 0 ? 0.5 : -0.5;
+        vel_.angular.z = 0;
+        //cmd_vel_pub_.publish(vel_);
      } else {
-        ROS_INFO("imu");
-        vel_.linear.x = 0.55;
-        vel_.angular.z = -(target_yaw_rad_ - current_yaw_rad_);
-        cmd_vel_pub_.publish(vel_);
+        //vel_.linear.x = 0.55;
+        vel_.linear.x = 0;
+        //vel_.angular.z = -(target_yaw_rad_ - current_yaw_rad_);
+        vel_.angular.z = 0;
+        //cmd_vel_pub_.publish(vel_);
      }
 }
 
@@ -124,6 +130,8 @@ void localPlanner::turnRadCallback(const std_msgs::Float32::ConstPtr& turn_rad){
     rotate_rad_ += turn_rad->data;
     target_yaw_rad_ -= turn_rad->data;
     turn_flg_ = rotate_rad_ != 0.0 ? true : false;
+    printf("%d\n", turn_flg_);
+    ROS_INFO("turnradcall");
 }
 
 void localPlanner::stopCallback(const std_msgs::Bool::ConstPtr& stop){
