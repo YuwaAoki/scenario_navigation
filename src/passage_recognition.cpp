@@ -17,10 +17,11 @@ class passageRecognition {
         int SCAN_HZ = 10;
         float ROBOT_RADIUS = 0.5;
         float MIN_WALL_DISTANCE = 1.0;
-        float distance_thresh = 2.0;
+        float distance_thresh = 3.0;
         float aisle_width_thresh_min = 0.6;
         float aisle_width_thresh_max = 5.4;
-        float laser_choice_thresh = 9.0;
+        float front_back_laser_choice_thresh = 3.0;
+        float left_right_laser_choice_thresh = 13.0;
         std::string robot_frame_ = "base_link";
         scenario_navigation::PassageType generate_publish_variable(bool center_flg, bool back_flg, bool left_flg, bool right_flg,
                                                                         int center_angle, int back_angle, int left_angle, int right_angle);
@@ -111,94 +112,124 @@ void passageRecognition::scanCallback(const sensor_msgs::LaserScan::ConstPtr& sc
 
     // measure distance
     // kanari kitanai kakugo ha iika ? ore ha dekiteru
-    int scan_left   = static_cast<int>((scan_angle + M_PI_2 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
-    int scan_left_front = static_cast<int>((scan_angle + M_PI / 36 * 17 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
-    int scan_center_left = static_cast<int>((scan_angle + M_PI / 36 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
-    int scan_center = static_cast<int>((scan_angle          - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
-    int scan_center_right  = static_cast<int>((scan_angle - M_PI / 36 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
-    int scan_right_front = static_cast<int>((scan_angle - M_PI / 36 * 17 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
-    int scan_right   = static_cast<int>((scan_angle - M_PI_2 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
-    int scan_right_back = static_cast<int>((scan_angle - M_PI / 36 * 19 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
-    int scan_back_right = static_cast<int>((scan_angle - M_PI / 36 * 35 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
-    int scan_back = static_cast<int>((scan_angle - M_PI - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
-    int scan_back_left = static_cast<int>((scan_angle + M_PI / 36 * 35 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
-    int scan_left_back = static_cast<int>((scan_angle + M_PI / 36 * 19 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_plus_90   = static_cast<int>((scan_angle + M_PI_2 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_plus_85 = static_cast<int>((scan_angle + M_PI / 36 * 17 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_plus_45 = static_cast<int>((scan_angle + M_PI_4 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_plus_5 = static_cast<int>((scan_angle + M_PI / 36 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_0 = static_cast<int>((scan_angle          - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_minus_5  = static_cast<int>((scan_angle - M_PI / 36 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_minus_45 = static_cast<int>((scan_angle - M_PI_4 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_minus_85 = static_cast<int>((scan_angle - M_PI / 36 * 17 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_minus_90   = static_cast<int>((scan_angle - M_PI_2 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_minus_95 = static_cast<int>((scan_angle - M_PI / 36 * 19 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_minus_135 = static_cast<int>((scan_angle - M_PI_4 * 3 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_minus_175 = static_cast<int>((scan_angle - M_PI / 36 * 35 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_180 = static_cast<int>((scan_angle - M_PI - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_plus_175 = static_cast<int>((scan_angle + M_PI / 36 * 35 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_plus_135 = static_cast<int>((scan_angle + M_PI_4 *3 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
+    int scan_plus_95 = static_cast<int>((scan_angle + M_PI / 36 * 19 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
 
-    float distance_left   = std::sqrt(x[scan_left]   * x[scan_left]   + y[scan_left]   * y[scan_left]  );
-    float distance_left_front = std::sqrt(x[scan_left_front]   * x[scan_left_front]   + y[scan_left_front]   * y[scan_left_front]  );
-    float distance_center_left = std::sqrt(x[scan_center_left]   * x[scan_center_left]   + y[scan_center_left]   * y[scan_center_left]  );
-    float distance_center = std::sqrt(x[scan_center] * x[scan_center] + y[scan_center] * y[scan_center]);
-    float distance_center_right = std::sqrt(x[scan_center_right]   * x[scan_center_right]   + y[scan_center_right]   * y[scan_center_right]  );
-    float distance_right_front = std::sqrt(x[scan_right_front]   * x[scan_right_front]   + y[scan_right_front]   * y[scan_right_front]  );
-    float distance_right  = std::sqrt(x[scan_right]  * x[scan_right]  + y[scan_right]  * y[scan_right] );
-    float distance_right_back = std::sqrt(x[scan_right_back]   * x[scan_right_back]   + y[scan_right_back]   * y[scan_right_back]  );
-    float distance_back_right = std::sqrt(x[scan_back_right]   * x[scan_back_right]   + y[scan_back_right]   * y[scan_back_right]  );
-    float distance_back   = std::sqrt(x[scan_back]   * x[scan_back]   + y[scan_back]   * y[scan_back]  );
-    float distance_back_left = std::sqrt(x[scan_back_left]   * x[scan_back_left]   + y[scan_back_left]   * y[scan_back_left]  );
-    float distance_left_back = std::sqrt(x[scan_left_back]   * x[scan_left_back]   + y[scan_left_back]   * y[scan_left_back]  );
+    float distance_plus_90   = std::sqrt(x[scan_plus_90]   * x[scan_plus_90]   + y[scan_plus_90]   * y[scan_plus_90]  );
+    float distance_plus_85 = std::sqrt(x[scan_plus_85]   * x[scan_plus_85]   + y[scan_plus_85]   * y[scan_plus_85]  );
+    float distance_plus_45 = std::sqrt(x[scan_plus_45]   * x[scan_plus_45]   + y[scan_plus_45]   * y[scan_plus_45]  );
+    float distance_plus_5 = std::sqrt(x[scan_plus_5]   * x[scan_plus_5]   + y[scan_plus_5]   * y[scan_plus_5]  );
+    float distance_0 = std::sqrt(x[scan_0] * x[scan_0] + y[scan_0] * y[scan_0]);
+    float distance_minus_5 = std::sqrt(x[scan_minus_5]   * x[scan_minus_5]   + y[scan_minus_5]   * y[scan_minus_5]  );
+    float distance_minus_45 = std::sqrt(x[scan_minus_45]   * x[scan_minus_45]   + y[scan_minus_45]   * y[scan_minus_45]  );
+    float distance_minus_85 = std::sqrt(x[scan_minus_85]   * x[scan_minus_85]   + y[scan_minus_85]   * y[scan_minus_85]  );
+    float distance_minus_90  = std::sqrt(x[scan_minus_90]  * x[scan_minus_90]  + y[scan_minus_90]  * y[scan_minus_90] );
+    float distance_minus_95 = std::sqrt(x[scan_minus_95]   * x[scan_minus_95]   + y[scan_minus_95]   * y[scan_minus_95]  );
+    float distance_minus_135 = std::sqrt(x[scan_minus_135]   * x[scan_minus_135]   + y[scan_minus_135]   * y[scan_minus_135]  );
+    float distance_minus_175 = std::sqrt(x[scan_minus_175]   * x[scan_minus_175]   + y[scan_minus_175]   * y[scan_minus_175]  );
+    float distance_180   = std::sqrt(x[scan_180]   * x[scan_180]   + y[scan_180]   * y[scan_180]  );
+    float distance_plus_175 = std::sqrt(x[scan_plus_175]   * x[scan_plus_175]   + y[scan_plus_175]   * y[scan_plus_175]  );
+    float distance_plus_135 = std::sqrt(x[scan_plus_135]   * x[scan_plus_135]   + y[scan_plus_135]   * y[scan_plus_135]  );
+    float distance_plus_95 = std::sqrt(x[scan_plus_95]   * x[scan_plus_95]   + y[scan_plus_95]   * y[scan_plus_95]  );
 
-    std::vector<int> scan_index = {scan_left, scan_center, scan_right, scan_back};
-    std::vector<float*> distance_list(11);
-    distance_list[0] = &distance_left;
-    distance_list[1] = &distance_left_front;
-    distance_list[2] = &distance_center_left;
-    distance_list[3] = &distance_center;
-    distance_list[4] = &distance_center_right;
-    distance_list[5] = &distance_right_front;
-    distance_list[6] = &distance_right;
-    distance_list[7] = &distance_right_back;
-    distance_list[8] = &distance_back_right;
-    distance_list[9] = &distance_back;
-    distance_list[10] = &distance_back_left;
-    distance_list[11] = &distance_left_back;
+    std::vector<int> scan_index = {scan_plus_90, scan_0, scan_minus_90, scan_180};
+    std::vector<float*> distance_list(16);
+    distance_list[0] = &distance_plus_90;
+    distance_list[1] = &distance_plus_85;
+    distance_list[2] = &distance_plus_45;
+    distance_list[3] = &distance_plus_5;
+    distance_list[4] = &distance_0;
+    distance_list[5] = &distance_minus_5;
+    distance_list[6] = &distance_minus_45;
+    distance_list[7] = &distance_minus_85;
+    distance_list[8] = &distance_minus_90;
+    distance_list[9] = &distance_minus_95;
+    distance_list[10] = &distance_minus_135;
+    distance_list[11] = &distance_minus_175;
+    distance_list[12] = &distance_180;
+    distance_list[13] = &distance_plus_175;
+    distance_list[14] = &distance_plus_135;
+    distance_list[15] = &distance_plus_95;
+    
 
-    float distance_left_front_to_left_back = std::abs(x[scan_left_front] - x[scan_left_back]);
-    float distance_center_left_to_back_left = std::abs(x[scan_center_left] - x[scan_back_left]);
-    float distance_center_left_to_center_right = std::abs(y[scan_center_left] - y[scan_center_right]);
-    float distance_left_front_to_right_front = std::abs(y[scan_left_front] - y[scan_right_front]);
-    float distance_right_front_right_back = std::abs(x[scan_right_front] - x[scan_right_back]);
-    float distance_center_right_to_back_right = std::abs(x[scan_center_right] - x[scan_back_right]);
-    float distance_back_left_to_back_right = std::abs(y[scan_back_left] - y[scan_back_right]);
-    float distance_left_back_to_right_back = std::abs(y[scan_left_back] - y[scan_right_back]);
+    float distance_plus_45_to_plus_135 = std::abs(x[scan_plus_45] - x[scan_plus_135]);
+    float distance_plus_85_to_plus_95 = std::abs(x[scan_plus_85] - x[scan_plus_95]);
+    float distance_plus_5_to_plus_175 = std::abs(x[scan_plus_5] - x[scan_plus_175]);
+    float distance_plus_5_to_minus_5 = std::abs(y[scan_plus_5] - y[scan_minus_5]);
+    float distance_plus_45_to_minus_45 = std::abs(y[scan_plus_45] - y[scan_minus_45]);
+    float distance_plus_85_to_minus_85 = std::abs(y[scan_plus_85] - y[scan_minus_85]);
+    float distance_minus_45_to_minus_135 = std::abs(x[scan_minus_45] - x[scan_minus_135]);
+    float distance_minus_85_to_minus_95 = std::abs(x[scan_minus_85] - x[scan_minus_95]);
+    float distance_minus_5_to_minus_175 = std::abs(x[scan_minus_5] - x[scan_minus_175]);
+    float distance_plus_175_to_minus_175 = std::abs(y[scan_plus_175] - y[scan_minus_175]);
+    float distance_plus_135_to_minus_135 = std::abs(y[scan_plus_135] - y[scan_minus_135]);
+    float distance_plus_95_to_minus_95 = std::abs(y[distance_plus_95] - y[scan_minus_95]);
 
-    ROS_INFO("distance_center1 is %f\n", distance_center);
+    float distance_plus_90_to_minus_90 = std::abs(y[scan_plus_90] - y[scan_minus_90]);
+
 
     // assume there is no passage if a collision is likely to occur
     checkRobotCollision(&x, &y, scan_index, distance_list);
-    //ROS_INFO("distance_center2 is %f\n", distance_center);
+
+    ROS_INFO("distance_0 is %f\n", distance_0);
+    ROS_INFO("distance_plus_90 is %f\n", distance_plus_90);
+    ROS_INFO("distance_minus_90 is %f\n", distance_minus_90);
+    ROS_INFO("distance_180 is %f\n", distance_180);
 
     // publish passage_type of passage recognition
     scenario_navigation::PassageType passage_type;
 	    
-    if(distance_left > laser_choice_thresh){
-        passage_type.left_flg = distance_left > distance_thresh && distance_left_front_to_left_back < aisle_width_thresh_max && distance_left_front_to_left_back > aisle_width_thresh_min ? true : false;
+    if(distance_plus_90 > left_right_laser_choice_thresh || distance_plus_90_to_minus_90 > 30){
+        passage_type.left_flg = distance_plus_90 > distance_thresh && distance_plus_85_to_plus_95 < aisle_width_thresh_max && distance_plus_85_to_plus_95 > aisle_width_thresh_min ? true : false;
         passage_type.left_angle = scan_angle + M_PI_2 - scan->angle_min;
     }else{
-        passage_type.left_flg = distance_left > distance_thresh && distance_center_left_to_back_left < aisle_width_thresh_max && distance_center_left_to_back_left > aisle_width_thresh_min ? true : false;
+        passage_type.left_flg = distance_plus_90 > distance_thresh && distance_plus_45_to_plus_135 < aisle_width_thresh_max && distance_plus_45_to_plus_135 > aisle_width_thresh_min ? true : false;
         passage_type.left_angle = scan_angle + M_PI_2 - scan->angle_min;
     };
 
-    if(distance_center > laser_choice_thresh){
-        passage_type.center_flg = distance_center > distance_thresh && distance_center_left_to_center_right < aisle_width_thresh_max && distance_center_left_to_center_right > aisle_width_thresh_min ? true : false;
+    if(distance_0 > 7.0 && distance_plus_90 > 10.0 && distance_minus_90 < 7.0 && distance_minus_90 > 3.0 && distance_180 > 9.0){
+        passage_type.center_flg = distance_0 > distance_thresh && distance_plus_45_to_minus_45 < aisle_width_thresh_max && distance_plus_45_to_minus_45 > aisle_width_thresh_min ? true : false;
+        passage_type.center_angle = scan_angle - scan->angle_min;
+    }else if(distance_0 > front_back_laser_choice_thresh){
+        passage_type.center_flg = distance_0 > distance_thresh && distance_plus_5_to_minus_5 < aisle_width_thresh_max && distance_plus_5_to_minus_5 > aisle_width_thresh_min ? true : false;
         passage_type.center_angle = scan_angle - scan->angle_min;
     }else{
-        passage_type.center_flg = distance_center > distance_thresh && distance_left_front_to_right_front < aisle_width_thresh_max && distance_left_front_to_right_front > aisle_width_thresh_min ? true : false;
+        passage_type.center_flg = distance_0 > distance_thresh && distance_plus_45_to_minus_45 < aisle_width_thresh_max && distance_plus_45_to_minus_45 > aisle_width_thresh_min ? true : false;
         passage_type.center_angle = scan_angle - scan->angle_min;
     };
 
-    if(distance_right > laser_choice_thresh){
-        passage_type.right_flg = distance_right > distance_thresh && distance_right_front_right_back < aisle_width_thresh_max && distance_right_front_right_back > aisle_width_thresh_min? true : false;
+    
+
+    if(distance_minus_90 > left_right_laser_choice_thresh || distance_plus_90_to_minus_90 > 30){
+        passage_type.right_flg = distance_minus_90 > distance_thresh && distance_minus_85_to_minus_95 < aisle_width_thresh_max && distance_minus_85_to_minus_95 > aisle_width_thresh_min? true : false;
         passage_type.right_angle = scan_angle - M_PI_2 - scan->angle_min;
     }else{
-        passage_type.right_flg = distance_right > distance_thresh && distance_center_right_to_back_right < aisle_width_thresh_max && distance_center_right_to_back_right > aisle_width_thresh_min? true : false;
+        passage_type.right_flg = distance_minus_90 > distance_thresh && distance_minus_45_to_minus_135 < aisle_width_thresh_max && distance_minus_45_to_minus_135 > aisle_width_thresh_min? true : false;
         passage_type.right_angle = scan_angle - M_PI_2 - scan->angle_min;
     };
 
-    if(distance_back > laser_choice_thresh){
-        passage_type.back_flg = distance_back > distance_thresh && distance_back_left_to_back_right < aisle_width_thresh_max && distance_back_left_to_back_right > aisle_width_thresh_min ? true : false;
+    if(distance_0 > 9.0 && distance_plus_90 < 7.0 && distance_plus_90 > 3.0 && distance_minus_90 > 10.0 && distance_180 > 7.0){
+        passage_type.back_flg = distance_180 > distance_thresh && distance_plus_135_to_minus_135 < aisle_width_thresh_max && distance_plus_135_to_minus_135 > aisle_width_thresh_min ? true : false;
+        passage_type.back_angle = scan_angle - M_PI - scan->angle_min;
+    }else if(distance_180 > front_back_laser_choice_thresh){
+        passage_type.back_flg = distance_180 > distance_thresh && distance_plus_175_to_minus_175 < aisle_width_thresh_max && distance_plus_175_to_minus_175 > aisle_width_thresh_min ? true : false;
         passage_type.back_angle = scan_angle - M_PI - scan->angle_min;
     }else{
-        passage_type.back_flg = distance_back > distance_thresh && distance_left_back_to_right_back < aisle_width_thresh_max && distance_left_back_to_right_back > aisle_width_thresh_min ? true : false;
+        passage_type.back_flg = distance_180 > distance_thresh && distance_plus_135_to_minus_135 < aisle_width_thresh_max && distance_plus_135_to_minus_135 > aisle_width_thresh_min ? true : false;
         passage_type.back_angle = scan_angle - M_PI - scan->angle_min;
     };
 
@@ -206,18 +237,18 @@ void passageRecognition::scanCallback(const sensor_msgs::LaserScan::ConstPtr& sc
     passage_type_pub_.publish(passage_type);
 
     // publish line for rviz
-    if (passage_type.left_flg  ) toe_index_list.push_back(scan_left  );
-    if (passage_type.center_flg) toe_index_list.push_back(scan_center);
-    if (passage_type.right_flg ) toe_index_list.push_back(scan_right );
-    if (passage_type.back_flg  ) toe_index_list.push_back(scan_back  );
-    toe_index_list.push_back(scan_left_front);
-    toe_index_list.push_back(scan_center_left);
-    toe_index_list.push_back(scan_center_right);
-    toe_index_list.push_back(scan_right_front);
-    toe_index_list.push_back(scan_right_back);
-    toe_index_list.push_back(scan_back_right);
-    toe_index_list.push_back(scan_back_left);
-    toe_index_list.push_back(scan_left_back);
+    if (passage_type.left_flg  ) toe_index_list.push_back(scan_plus_90  );
+    if (passage_type.center_flg) toe_index_list.push_back(scan_0);
+    if (passage_type.right_flg ) toe_index_list.push_back(scan_minus_90 );
+    if (passage_type.back_flg  ) toe_index_list.push_back(scan_180  );
+    //toe_index_list.push_back(scan_plus_85);
+    //toe_index_list.push_back(scan_plus_5);
+    //toe_index_list.push_back(scan_minus_5);
+    //toe_index_list.push_back(scan_minus_85);
+    //toe_index_list.push_back(scan_minus_95);
+    //toe_index_list.push_back(scan_minus_175);
+    //toe_index_list.push_back(scan_plus_175);
+    //toe_index_list.push_back(scan_plus_95);
     visualization_msgs::MarkerArray marker_line;
     marker_line.markers.resize(toe_index_list.size());
     geometry_msgs::Point linear_start;
