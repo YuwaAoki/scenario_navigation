@@ -111,7 +111,6 @@ void passageRecognition::scanCallback(const sensor_msgs::LaserScan::ConstPtr& sc
     double scan_angle = static_cast<double>((max_angle <= 45) ? max_angle : max_angle - 90)/180.0*M_PI;
 
     // measure distance
-    // kanari kitanai kakugo ha iika ? ore ha dekiteru
     int scan_plus_90   = static_cast<int>((scan_angle + M_PI_2 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
     int scan_plus_85 = static_cast<int>((scan_angle + M_PI / 36 * 17 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
     int scan_plus_45 = static_cast<int>((scan_angle + M_PI_4 - scan->angle_min) / scan->angle_increment + num_scan) % num_scan;
